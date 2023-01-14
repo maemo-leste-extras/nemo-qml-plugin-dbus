@@ -3,7 +3,7 @@ Section: libs
 Priority: optional
 Maintainer: lichenggang <lichenggang@deepin.org>
 Build-Depends: debhelper-compat (= 13), qt5-qmake, qtbase5-dev,
-               qtdeclarative5-dev, qt5-default, libglib2.0-dev, libdbus-1-dev
+               qtdeclarative5-dev, libglib2.0-dev, libdbus-1-dev
 Standards-Version: 4.5.1
 Rules-Requires-Root: no
 Homepage: https://github.com/sailfishos/nemo-qml-plugin-dbus
