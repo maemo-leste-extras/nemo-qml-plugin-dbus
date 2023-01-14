@@ -1,6 +1,3 @@
-XSBC-Bugtracker: mailto:norayr@arnet.am
-
-
 Source: nemo-qml-plugin-dbus
 Section: libs
 Priority: optional
@@ -28,3 +25,4 @@ Description: Nemo QML Plugin D-Bus
  to call and handle the replies from asynchronous DBus methods.
  .
  This package contains the developent files
+
