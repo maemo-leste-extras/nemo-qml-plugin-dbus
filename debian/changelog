@@ -1,3 +1,9 @@
+nemo-qml-plugin-dbus (2.1.24-1+leste1) unstable; urgency=medium
+
+  * maemo-leste/chimaera package
+
+ -- Norayr Chilingarian <norayr@arnet.am>  Fri, 14 Jan 2023 05:50:00 +0400
+
 nemo-qml-plugin-dbus (2.1.24-1) unstable; urgency=medium
 
   [ Sebastian Spaeth ]
