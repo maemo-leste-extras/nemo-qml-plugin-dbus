@@ -19,7 +19,7 @@ Description: Nemo QML Plugin D-Bus
 
 Package: libnemodbus-dev
 Architecture: any
-Depends: ${misc:Depends}, libnemodbus1 (= ${binary:Version})
+Depends: ${misc:Depends}, libnemodbus (= ${binary:Version})
 Description: Nemo QML Plugin D-Bus
  The nemo-dbus library provides C++11 extensions to QtDBus to make it easier
  to call and handle the replies from asynchronous DBus methods.
