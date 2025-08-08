@@ -101,7 +101,11 @@ QVariant demarshallDBusArgument(const QVariant &val, int depth)
         for (int i = 0; i < arr.size(); ++i)
             lst << QVariant::fromValue(static_cast<quint8>(arr[i]));
         res = QVariant::fromValue(lst);
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+    } else if (type == val.typeId()) {
+#else
     } else if (type == val.type()) {
+#endif
         /* Already is built-in qt type, use as is */
         res = val;
     } else if (type == qMetaTypeId<QDBusVariant>()) {
@@ -112,7 +116,7 @@ QVariant demarshallDBusArgument(const QVariant &val, int depth)
         res = val.value<QDBusObjectPath>().path();
     } else if (type == qMetaTypeId<QDBusSignature>()) {
         /* Convert QDBusSignature to QString */
-        res =  val.value<QDBusSignature>().signature();
+        res = val.value<QDBusSignature>().signature();
     } else if (type == qMetaTypeId<QDBusUnixFileDescriptor>()) {
         /* Ignore, leave it to the receiver to extract the file descriptor */
         res = val;

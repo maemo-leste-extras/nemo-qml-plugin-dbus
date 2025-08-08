@@ -87,11 +87,31 @@
           to functions where the first letter is lowercase (the D-Bus signal \c {UpdateOne} is
           handled by the QML/JavaScript function \c {updateOne}).
 
+    \section2 Handling D-Bus Properties
+
+    If \l propertiesEnabled is set to \c true, properties of the destination object will
+    be available on the local object with matching names.
+
+    \code
+    DBusInterface {
+        service: 'org.example.service'
+        path: '/org/example/service'
+        iface: 'org.example.intf'
+
+        propertiesEnabled: true
+
+        property string activeState
+        onActiveStateChanged: {
+            // handle state change
+        }
+    }
+    \endcode
+
     \section2 Calling D-Bus Methods
 
     Remote D-Bus methods can be called using either \l call() or \l typedCall(). \l call() provides
-    a simplier calling API, only supporting basic data types and discards any value return by the
-    method. \l typedCall() supports more data types and has callbacks for call completion and error.
+    a simpler calling API, only supporting basic data types, \l typedCall()
+    supports more data types. Both methods provide callbacks for response and error handling.
 
     Imagine a D-Bus object in service \c {org.example.service} at path \c {/org/example/service} and
     interface \c {org.example.intf} with two methods:
@@ -157,10 +177,15 @@ DeclarativeDBusInterface::DeclarativeDBusInterface(QObject *parent)
 
 DeclarativeDBusInterface::~DeclarativeDBusInterface()
 {
-    foreach (QDBusPendingCallWatcher *watcher, m_pendingCalls.keys())
-        delete watcher;
+    qDeleteAll(m_pendingCalls.keys());
 }
 
+/*!
+    \qmlproperty bool DBusInterface::watchServiceStatus
+
+    When enabled, the \l status property will match the current availability of the
+    D-Bus service.
+*/
 bool DeclarativeDBusInterface::watchServiceStatus() const
 {
     return m_watchServiceStatus;
@@ -178,6 +203,18 @@ void DeclarativeDBusInterface::setWatchServiceStatus(bool watchServiceStatus)
         connectPropertyHandler();
     }
 }
+
+/*!
+    \qmlproperty enumeration DBusInterface::status
+
+    Returns the availability of the service if tracking is enabled via \l watchServiceStatus.
+    Value can be:
+    \list
+    \li DeclarativeDBusInterface.Unknown
+    \li DeclarativeDBusInterface.Unavailable
+    \li DeclarativeDBusInterface.Available
+    \endlist
+*/
 
 DeclarativeDBusInterface::Status DeclarativeDBusInterface::status() const
 {
@@ -308,6 +345,13 @@ void DeclarativeDBusInterface::setSignalsEnabled(bool enabled)
     }
 }
 
+/*!
+    \qmlproperty bool DBusInterface::propertiesEnabled
+
+    This property holds whether this object tracks properties on the remote D-Bus object.
+    See \l {Handling D-Bus Properties}.
+*/
+
 bool DeclarativeDBusInterface::propertiesEnabled() const
 {
     return m_propertiesEnabled;
@@ -322,7 +366,9 @@ void DeclarativeDBusInterface::setPropertiesEnabled(bool enabled)
         m_propertiesEnabled = enabled;
         emit propertiesEnabledChanged();
 
-        queryPropertyValues();  // connectPropertyHandler will call this as well.  This just cover the case where connectPropertyHandler was previously called and m_propertiesEnabled was false.
+        // connectPropertyHandler will call this as well.  This just cover the case where
+        // connectPropertyHandler was previously called and m_propertiesEnabled was false.
+        queryPropertyValues();
         connectPropertyHandler();
     }
 }
@@ -348,15 +394,12 @@ QVariantList DeclarativeDBusInterface::argumentsFromScriptValue(const QJSValue &
 }
 
 /*!
-    \qmlmethod void DBusInterface::call(string method, variant arguments, variant callback, variant errorCallback)
+    \qmlmethod void DBusInterface::call(string method, var arguments, var callback, var errorCallback)
 
     Call a D-Bus method with the name \a method on the object with \a arguments as either a single
     value or an array. For a function with no arguments, pass in \c undefined.
 
-    When the function returns, call \a callback with a single argument that is the return value. The
-    \a callback argument is optional, if set to \c undefined (the default), the return value will be
-    discarded. If the function fails \a errorCallback is called if it is not set to \c undefined
-    (the default).
+    The callback arguments are handled as described under \l typedCall().
 
     \note This function supports passing basic data types and will fail if the signature of the
           remote method does not match the signature determined from the type of \a arguments. The
@@ -470,10 +513,18 @@ static void flattenVariantArrayGuessType(QVariant &var)
     /* If all items in the list do not share the same type:
      * use as is -> each value will be wrapped in variant
      * container */
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+    int t = arr[0].typeId();
+#else
     int t = arr[0].type();
+#endif
     int n = arr.size();
     for (int i = 1; i < n; ++i) {
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+        if (arr[i].typeId() != t)
+#else
         if (arr[i].type() != t)
+#endif
             return;
     }
 
@@ -494,7 +545,11 @@ static void flattenVariantArrayGuessType(QVariant &var)
         /* Unhandled types are encoded as variant:array:variant:val
          * instead of variant:array:val what we actually want.
          */
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+        qWarning("unhandled array type: %d (%s)", t, QMetaType(t).name());
+#else
         qWarning("unhandled array type: %d (%s)", t, QVariant::typeToName(t));
+#endif
         break;
     }
 }
@@ -598,6 +653,23 @@ DeclarativeDBusInterface::marshallDBusArgument(QDBusMessage &msg, const QJSValue
             msg << vec;
             return true;
         }
+    } else if (t == "a{sv}") {
+        if (!value.isObject()) {
+            qWarning() << "Invalid value for type specifier:" << t << "v:" << value.toVariant();
+            qmlInfo(this) << "Invalid value for type specifier: " << t << " v: " << value.toVariant();
+            return false;
+        }
+        QVariantMap variantMap;
+        QJSValueIterator it(value);
+        while (it.hasNext()) {
+            it.next();
+            QVariant var = it.value().toVariant();
+            flattenVariantArrayGuessType(var);
+            variantMap.insert(it.name(), var);
+        }
+
+        msg << variantMap;
+        return true;
     }
 
     qWarning() << "DeclarativeDBusInterface::typedCall - Invalid type specifier:" << t;
@@ -656,7 +728,7 @@ bool DeclarativeDBusInterface::serviceAvailable() const
 }
 
 /*!
-    \qmlmethod bool DBusInterface::typedCall(string method, variant arguments, variant callback, variant errorCallback)
+    \qmlmethod bool DBusInterface::typedCall(string method, var arguments, var callback, var errorCallback)
 
     Call a D-Bus method with the name \a method on the object with \a arguments. Each parameter is
     described by an object:
@@ -671,10 +743,27 @@ bool DeclarativeDBusInterface::serviceAvailable() const
     Where \c type is the D-Bus type that \c value should be marshalled as. \a arguments can be
     either a single object describing the parameter or an array of objects.
 
-    When the function returns, call \a callback with a single argument that is the return value. The
-    \a callback argument is optional, if set to \c undefined (the default), the return value will be
-    discarded. If the function fails \a errorCallback is called if it is not set to \c undefined
-    (the default).
+    A method with the D-Bus signature \c{ssa{sv}}, so two string parameters and an array of dict
+    can be called like this:
+
+    \code
+    typedCall("setInventory", [
+        { "type" : 's', "value": "apple" },
+        { "type" : 's', "value": "banana" },
+        { "type" : 'a{sv}',
+          "value": [ { "name": "rose", "color": "red", "hasThorns": true, "count": 3 } ],
+        },
+    ])
+    \endcode
+
+    When the function returns, \a callback is called with the method reply message as a single argument.
+    If the function fails, \a errorCallback is called with two parameters, the
+    error name (e.g. \c org.freedesktop.DBus.Error.InvalidArgs) and the error
+    message ("Failed to create method call (Invalid argument)").
+
+    Both callback arguments are optional, if set to \c undefined (the default),
+    the return value and/or error messages will be discarded.
+
 */
 bool DeclarativeDBusInterface::typedCall(const QString &method, const QJSValue &arguments,
                                          const QJSValue &callback,
@@ -722,7 +811,7 @@ bool DeclarativeDBusInterface::dispatch(
 }
 
 /*!
-    \qmlproperty variant DBusInteface::getProperty(string name)
+    \qmlmethod var DBusInterface::getProperty(string name)
 
     Returns the the D-Bus property named \a name from the object.
 */
@@ -751,7 +840,7 @@ QVariant DeclarativeDBusInterface::getProperty(const QString &name)
 }
 
 /*!
-    \qmlmethod void DBusInterface::setProperty(string name, variant value)
+    \qmlmethod void DBusInterface::setProperty(string name, var value)
 
     Sets the D-Bus property named \a name on the object to \a value.
 
@@ -853,7 +942,11 @@ void DeclarativeDBusInterface::signalHandler(const QDBusMessage &message)
 
     for (int i = 0; i < normalized.count(); ++i) {
         const QVariant &arg = normalized.at(i);
+#if (QT_VERSION >= QT_VERSION_CHECK(6, 0, 0))
+        args[i] = QGenericArgument(QMetaType(arg.metaType()).name(), arg.data());
+#else
         args[i] = Q_ARG(QVariant, arg);
+#endif
     }
 
     QMetaMethod method = m_signals.value(message.member());
@@ -1145,10 +1238,10 @@ void DeclarativeDBusInterface::introspect()
 {
     m_introspected = true;
 
-    QDBusMessage message =
-            QDBusMessage::createMethodCall(m_service, m_path,
-                                           QLatin1String("org.freedesktop.DBus.Introspectable"),
-                                           QLatin1String("Introspect"));
+    QDBusMessage message
+            = QDBusMessage::createMethodCall(m_service, m_path,
+                                             QLatin1String("org.freedesktop.DBus.Introspectable"),
+                                             QLatin1String("Introspect"));
 
     if (message.type() == QDBusMessage::InvalidMessage)
         return;
