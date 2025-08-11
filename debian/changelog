@@ -1,3 +1,9 @@
+nemo-qml-plugin-dbus (2.1.40-1) unstable; urgency=medium
+
+  * just bumping version to 2.1.40; maemo-leste/daedalus package
+
+ -- Norayr Chilingarian <norayr@arnet.am>  Tue, 12 Aug 2025 01:06:00 +0400
+
 nemo-qml-plugin-dbus (2.1.39-3) unstable; urgency=medium
 
   * update to 2.1.39; maemo-leste/daedalus package
