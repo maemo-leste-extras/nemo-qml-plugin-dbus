@@ -8,7 +8,7 @@ Standards-Version: 4.5.1
 Rules-Requires-Root: no
 Homepage: https://github.com/sailfishos/nemo-qml-plugin-dbus
 
-Package: libnemodbus
+Package: libnemodbus1
 Architecture: any
 Depends: ${misc:Depends}, ${shlibs:Depends}
 Description: Nemo QML Plugin D-Bus
